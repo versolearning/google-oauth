@@ -7,7 +7,8 @@ Google.whitelistedFields = ['id', 'email', 'verified_email', 'name', 'given_name
                    'family_name', 'picture', 'locale', 'timezone', 'gender'];
 
 function getServiceDataFromTokens(tokens) {
-  var accessToken = tokens.accessToken;
+  // On Android tokens.accessToken may be undefined
+  var accessToken = tokens.accessToken || getTokens(tokens).accessToken;
   var idToken = tokens.idToken;
   var scopes = getScopes(accessToken);
   var identity = getIdentity(accessToken);
@@ -53,20 +54,30 @@ Accounts.registerLoginHandler(function (request) {
     return;
   }
 
-  const { serviceData } = getServiceDataFromTokens({
+  const query = {
     accessToken: request.accessToken,
     refreshToken: request.refreshToken,
     idToken: request.idToken,
-  });
+  };
 
-  return Accounts.updateOrCreateUserFromExternalService("google", {
+  // On Android accessToken may be undefined. In that case we'll get one with
+  // the serverAuthCode
+  if (!query.accessToken) {
+    Object.assign(query, { code: request.serverAuthCode });
+  }
+
+  const { serviceData } = getServiceDataFromTokens(query);
+
+  const object = {
     id: request.userId,
     idToken: request.idToken,
     accessToken: request.accessToken,
     email: request.email,
     picture: request.imageUrl,
     ...serviceData,
-  });
+  };
+
+  return Accounts.updateOrCreateUserFromExternalService("google", object);
 });
 
 function getServiceData(query) {
